@@ -9,8 +9,7 @@ env:
   REGION: us-central1
   REPO: clrdbt
   IMAGE: clrdbt
-  GKE_CLUSTER: clrdbt-cluster
-  GKE_ZONE: us-central1-a
+  SERVICE: clrdbt
 
 jobs:
   deploy:
@@ -48,14 +47,16 @@ jobs:
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:latest
 
-      - name: Get GKE credentials
-        uses: google-github-actions/get-gke-credentials@v2
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
-          cluster_name: ${{ env.GKE_CLUSTER }}
-          location: ${{ env.GKE_ZONE }}
-
-      - name: Deploy to GKE
-        run: |
-          kubectl set image deployment/clrdbt \
-            clrdbt=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
-          kubectl rollout status deployment/clrdbt
+          service: ${{ env.SERVICE }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
+          secrets: |
+            STRIPE_SECRET_KEY=stripe-secret-key:latest
+            STRIPE_WEBHOOK_SECRET=stripe-webhook-secret:latest
+            GCS_BUCKET_NAME=gcs-bucket-name:latest
+            GCS_ACCESS_TOKEN=gcs-access-token:latest
+          env_vars: |
+            APP_BASE_URL=https://clrdbt.com
