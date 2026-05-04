@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: clrdbt
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "clrdbt-ip"
+    networking.gke.io/managed-certificates: "clrdbt-cert"
+spec:
+  rules:
+    - host: clrdbt.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: clrdbt
+                port:
+                  number: 80
+    - host: www.clrdbt.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: clrdbt
+                port:
+                  number: 80

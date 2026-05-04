@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>clrdbt — Enter Your Debts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-gray-900 font-sans">
+
+  <main class="min-h-screen flex flex-col items-center px-6 py-16">
+    <div class="max-w-2xl w-full">
+
+      <a href="/index.html" class="text-sm text-gray-400 hover:text-gray-600 mb-8 inline-block">&larr; Back</a>
+
+      <h1 class="text-3xl font-black mb-2">Enter your debts</h1>
+      <p class="text-gray-500 mb-10">Add each debt below. We'll calculate the snowball payoff order and your exact debt-free date.</p>
+
+      <form id="debt-form" class="space-y-6">
+
+        <!-- Monthly payment -->
+        <div class="border border-gray-200 rounded-md p-5">
+          <label class="block text-sm font-semibold mb-1" for="monthly-payment">
+            Total monthly payment you can make ($)
+          </label>
+          <p class="text-xs text-gray-400 mb-2">This is the total amount you can put toward all debts each month.</p>
+          <input
+            id="monthly-payment"
+            name="monthly_payment"
+            type="number"
+            min="1"
+            step="0.01"
+            required
+            placeholder="e.g. 500"
+            class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          />
+        </div>
+
+        <!-- Debt entries -->
+        <div id="debts-container" class="space-y-4">
+          <!-- Debt rows injected by JS -->
+        </div>
+
+        <button
+          type="button"
+          id="add-debt-btn"
+          class="w-full border-2 border-dashed border-gray-300 text-gray-400 rounded-md py-3 text-sm hover:border-gray-500 hover:text-gray-600 transition"
+        >
+          + Add another debt
+        </button>
+
+        <div class="pt-4">
+          <button
+            type="submit"
+            class="w-full bg-black text-white font-semibold py-4 rounded-md hover:bg-gray-800 transition text-lg"
+          >
+            Generate My Plan — $9
+          </button>
+          <p class="text-xs text-center text-gray-400 mt-2">You'll be taken to Stripe to complete payment.</p>
+        </div>
+
+      </form>
+
+      <div id="error-msg" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm"></div>
+
+    </div>
+  </main>
+
+  <script>
+    const container = document.getElementById('debts-container');
+    const addBtn = document.getElementById('add-debt-btn');
+    const form = document.getElementById('debt-form');
+    const errorMsg = document.getElementById('error-msg');
+    let debtCount = 0;
+
+    function addDebt() {
+      debtCount++;
+      const idx = debtCount;
+      const div = document.createElement('div');
+      div.className = 'border border-gray-200 rounded-md p-5 relative';
+      div.innerHTML = `
+        <div class="flex justify-between items-center mb-3">
+          <span class="text-sm font-semibold text-gray-700">Debt #${idx}</span>
+          ${idx > 1 ? `<button type="button" class="text-xs text-red-400 hover:text-red-600" onclick="this.closest('.border').remove()">Remove</button>` : ''}
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-500 mb-1">Debt name</label>
+            <input name="debts[${idx}][name]" type="text" required placeholder="e.g. Visa Card"
+              class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Balance ($)</label>
+            <input name="debts[${idx}][balance]" type="number" min="1" step="0.01" required placeholder="e.g. 3200"
+              class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+          </div>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">Interest rate (%)</label>
+            <input name="debts[${idx}][interest_rate]" type="number" min="0" max="100" step="0.01" required placeholder="e.g. 19.99"
+              class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs text-gray-500 mb-1">Minimum monthly payment ($)</label>
+            <input name="debts[${idx}][min_payment]" type="number" min="1" step="0.01" required placeholder="e.g. 65"
+              class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black" />
+          </div>
+        </div>
+      `;
+      container.appendChild(div);
+    }
+
+    // Start with 2 debt rows
+    addDebt();
+    addDebt();
+
+    addBtn.addEventListener('click', addDebt);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.classList.add('hidden');
+
+      const monthlyPayment = parseFloat(document.getElementById('monthly-payment').value);
+
+      const debtDivs = container.querySelectorAll('.border');
+      const debts = [];
+      for (const div of debtDivs) {
+        const name = div.querySelector('[name$="[name]"]').value.trim();
+        const balance = parseFloat(div.querySelector('[name$="[balance]"]').value);
+        const interestRate = parseFloat(div.querySelector('[name$="[interest_rate]"]').value);
+        const minPayment = parseFloat(div.querySelector('[name$="[min_payment]"]').value);
+        debts.push({ name, balance, interest_rate: interestRate, min_payment: minPayment });
+      }
+
+      const totalMin = debts.reduce((sum, d) => sum + d.min_payment, 0);
+      if (monthlyPayment < totalMin) {
+        errorMsg.textContent = `Your monthly payment ($${monthlyPayment}) must be at least the sum of all minimum payments ($${totalMin.toFixed(2)}).`;
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ monthly_payment: monthlyPayment, debts }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(err.error || 'Server error');
+        }
+
+        const data = await res.json();
+        // Redirect to Stripe Checkout
+        window.location.href = data.checkout_url;
+      } catch (err) {
+        errorMsg.textContent = err.message;
+        errorMsg.classList.remove('hidden');
+      }
+    });
+  </script>
+
+</body>
+</html>

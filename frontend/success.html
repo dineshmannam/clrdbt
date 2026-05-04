@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>clrdbt — Your Plan Is Ready</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-gray-900 font-sans">
+
+  <main class="min-h-screen flex flex-col items-center justify-center px-6 py-20">
+    <div class="max-w-lg w-full text-center">
+
+      <div id="loading" class="">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-black mx-auto mb-6"></div>
+        <p class="text-gray-500">Verifying payment and preparing your plan...</p>
+      </div>
+
+      <div id="success" class="hidden">
+        <p class="text-5xl mb-6">&#10003;</p>
+        <h1 class="text-3xl font-black mb-3">Your debt-free plan is ready.</h1>
+        <p class="text-gray-500 mb-8">Your PDF should download automatically. If it doesn't, click below.</p>
+        <a id="download-link" href="#" class="inline-block bg-black text-white font-semibold px-8 py-4 rounded-md hover:bg-gray-800 transition text-lg mb-6">
+          Download My Plan
+        </a>
+        <p class="text-sm text-gray-400">Print it. Sign it. Hang it somewhere you'll see every day.</p>
+        <p class="text-xs text-gray-300 mt-6 italic">"Sign it. Hang it. Own it."</p>
+      </div>
+
+      <div id="error" class="hidden">
+        <h1 class="text-2xl font-black mb-3 text-red-700">Something went wrong.</h1>
+        <p id="error-text" class="text-gray-500 mb-6"></p>
+        <a href="/index.html" class="text-sm text-gray-500 hover:text-gray-700">&larr; Return home</a>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+
+    const loading = document.getElementById('loading');
+    const success = document.getElementById('success');
+    const error = document.getElementById('error');
+    const errorText = document.getElementById('error-text');
+    const downloadLink = document.getElementById('download-link');
+
+    async function deliver() {
+      if (!sessionId) {
+        showError('No session ID found. Please return to the homepage.');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/deliver?session_id=${encodeURIComponent(sessionId)}`);
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(err.error || 'Delivery failed');
+        }
+
+        const data = await res.json();
+        const url = data.download_url;
+
+        downloadLink.href = url;
+        loading.classList.add('hidden');
+        success.classList.remove('hidden');
+
+        // Auto-trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'clrdbt-plan.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (err) {
+        showError(err.message);
+      }
+    }
+
+    function showError(msg) {
+      loading.classList.add('hidden');
+      errorText.textContent = msg;
+      error.classList.remove('hidden');
+    }
+
+    deliver();
+  </script>
+
+</body>
+</html>
