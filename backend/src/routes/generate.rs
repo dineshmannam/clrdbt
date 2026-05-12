@@ -32,16 +32,28 @@ fn validate(req: &GenerateRequest) -> Result<(), String> {
 
     for debt in &req.debts {
         if !debt.balance.is_finite() || debt.balance <= 0.0 {
-            return Err(format!("'{}': balance must be a positive number.", debt.name));
+            return Err(format!(
+                "'{}': balance must be a positive number.",
+                debt.name
+            ));
         }
         if !debt.interest_rate.is_finite() || debt.interest_rate < 0.0 {
-            return Err(format!("'{}': interest rate must be 0 or greater.", debt.name));
+            return Err(format!(
+                "'{}': interest rate must be 0 or greater.",
+                debt.name
+            ));
         }
         if debt.interest_rate > 1000.0 {
-            return Err(format!("'{}': interest rate seems unreasonably high (> 1000%).", debt.name));
+            return Err(format!(
+                "'{}': interest rate seems unreasonably high (> 1000%).",
+                debt.name
+            ));
         }
         if !debt.min_payment.is_finite() || debt.min_payment < 0.0 {
-            return Err(format!("'{}': minimum payment must be 0 or greater.", debt.name));
+            return Err(format!(
+                "'{}': minimum payment must be 0 or greater.",
+                debt.name
+            ));
         }
     }
 
@@ -72,7 +84,9 @@ pub async fn handle(
             error!("PDF generation failed: {e}");
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse { error: "PDF generation failed.".into() }),
+                Json(ErrorResponse {
+                    error: "PDF generation failed.".into(),
+                }),
             ));
         }
     };
@@ -83,7 +97,9 @@ pub async fn handle(
         error!("GCS upload failed: {e}");
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse { error: "Storage failed.".into() }),
+            Json(ErrorResponse {
+                error: "Storage failed.".into(),
+            }),
         ));
     }
 
@@ -93,7 +109,9 @@ pub async fn handle(
             error!("Signed URL generation failed: {e}");
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse { error: "Download URL generation failed.".into() }),
+                Json(ErrorResponse {
+                    error: "Download URL generation failed.".into(),
+                }),
             ));
         }
     };
@@ -105,7 +123,12 @@ pub async fn handle(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, http::{Request, StatusCode}, routing::post, Router};
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+        routing::post,
+        Router,
+    };
     use tower::ServiceExt;
 
     fn app() -> Router {
@@ -123,11 +146,19 @@ mod tests {
     }
 
     fn req(monthly_payment: f64, debts: Vec<calculation::DebtInput>) -> GenerateRequest {
-        GenerateRequest { monthly_payment, debts }
+        GenerateRequest {
+            monthly_payment,
+            debts,
+        }
     }
 
     fn debt(name: &str, balance: f64, rate: f64, min: f64) -> calculation::DebtInput {
-        calculation::DebtInput { name: name.into(), balance, interest_rate: rate, min_payment: min }
+        calculation::DebtInput {
+            name: name.into(),
+            balance,
+            interest_rate: rate,
+            min_payment: min,
+        }
     }
 
     // --- validate() unit tests (no HTTP, no PDF, no GCS) ---
