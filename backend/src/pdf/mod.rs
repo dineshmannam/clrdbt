@@ -51,7 +51,7 @@ async fn html_to_pdf(html: &str) -> Result<Vec<u8>> {
 
     page.set_content(html).await?;
 
-    let pdf_opts = chromiumoxide::page::PrintToPdfParams {
+    let pdf_opts = chromiumoxide::cdp::browser_protocol::page::PrintToPdfParams {
         print_background: Some(true),
         paper_width: Some(8.5),
         paper_height: Some(11.0),

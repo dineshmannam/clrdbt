@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use time::{Date, Duration, OffsetDateTime};
+use time::{Date, OffsetDateTime};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DebtInput {
@@ -85,7 +85,6 @@ pub fn calculate(mut debts: Vec<DebtInput>, monthly_payment: f64) -> SnowballRes
                 if balances[i] > 0.01 {
                     let payment = remaining_budget.min(balances[i]);
                     balances[i] -= payment;
-                    remaining_budget -= payment;
                     if balances[i] <= 0.01 {
                         balances[i] = 0.0;
                         if payoff_months[i].is_none() {
@@ -179,4 +178,139 @@ fn format_date(date: Date) -> String {
         time::Month::December => "December",
     };
     format!("{} {}", month_name, date.year())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn debt(name: &str, balance: f64, rate: f64, min: f64) -> DebtInput {
+        DebtInput { name: name.into(), balance, interest_rate: rate, min_payment: min }
+    }
+
+    // --- Snowball ordering ---
+
+    #[test]
+    fn debts_sorted_smallest_first() {
+        let debts = vec![
+            debt("Big",   5000.0, 10.0, 100.0),
+            debt("Small",  500.0, 10.0,  50.0),
+        ];
+        let result = calculate(debts, 200.0);
+        assert_eq!(result.debts[0].name, "Small");
+        assert_eq!(result.debts[1].name, "Big");
+    }
+
+    // --- Zero-interest payoff math ---
+
+    #[test]
+    fn single_debt_zero_interest_exact_months() {
+        // $1 200 at 0%, $100/month → exactly 12 months
+        let result = calculate(vec![debt("Card", 1200.0, 0.0, 100.0)], 100.0);
+        assert_eq!(result.total_months, 12);
+    }
+
+    #[test]
+    fn single_debt_overpay_clears_faster() {
+        // $600 at 0%, $200/month → 3 months, not 6
+        let result = calculate(vec![debt("Card", 600.0, 0.0, 100.0)], 200.0);
+        assert_eq!(result.total_months, 3);
+    }
+
+    // --- Snowball rollover ---
+
+    #[test]
+    fn minimum_rolls_over_after_payoff() {
+        // Small: $500 at 0%, min $100 → paid off in 5 months when $200/mo extra
+        // Big:   $2 000 at 0%, min $100
+        // Total budget: $300. Extra $100 goes to small each month.
+        // After month 5 (small gone): full $300 hits big.
+        // Big balance after 5 months of $100 payments: $1 500.
+        // $1 500 / $300 = 5 more months → total 10.
+        let debts = vec![
+            debt("Big",   2000.0, 0.0, 100.0),
+            debt("Small",  500.0, 0.0, 100.0),
+        ];
+        let result = calculate(debts, 300.0);
+        assert_eq!(result.total_months, 10);
+    }
+
+    #[test]
+    fn small_debt_paid_before_big() {
+        let debts = vec![
+            debt("Big",   3000.0, 5.0, 60.0),
+            debt("Small",  300.0, 5.0, 20.0),
+        ];
+        let result = calculate(debts, 150.0);
+        // Small should have an earlier payoff date than Big
+        let small = result.debts.iter().find(|d| d.name == "Small").unwrap();
+        let big   = result.debts.iter().find(|d| d.name == "Big").unwrap();
+        assert!(small.payoff_date <= big.payoff_date);
+    }
+
+    // --- Interest accrual ---
+
+    #[test]
+    fn interest_increases_total_paid() {
+        let no_interest  = calculate(vec![debt("Card", 1000.0,  0.0, 50.0)], 100.0);
+        let with_interest = calculate(vec![debt("Card", 1000.0, 20.0, 50.0)], 100.0);
+        let no_int_paid: f64  = no_interest.total_interest.parse().unwrap();
+        let with_int_paid: f64 = with_interest.total_interest.parse().unwrap();
+        assert!(with_int_paid > no_int_paid);
+        assert!(with_interest.total_months > no_interest.total_months);
+    }
+
+    // --- Output format ---
+
+    #[test]
+    fn debt_free_date_is_month_year_format() {
+        let result = calculate(vec![debt("Card", 100.0, 0.0, 100.0)], 100.0);
+        let parts: Vec<&str> = result.debt_free_date.split(' ').collect();
+        assert_eq!(parts.len(), 2, "expected 'Month YYYY'");
+        assert!(parts[1].parse::<i32>().is_ok(), "year should be a number");
+    }
+
+    #[test]
+    fn totals_formatted_to_two_decimal_places() {
+        let result = calculate(vec![debt("Card", 1000.0, 0.0, 100.0)], 100.0);
+        assert!(result.total_balance.contains('.'));
+        assert_eq!(result.total_balance.split('.').nth(1).unwrap().len(), 2);
+    }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn single_month_payoff() {
+        // Balance equals monthly payment → paid in 1 month
+        let result = calculate(vec![debt("Card", 200.0, 0.0, 200.0)], 200.0);
+        assert_eq!(result.total_months, 1);
+    }
+
+    #[test]
+    fn minimum_payment_only_terminates() {
+        // Even with no extra budget, calculation should still terminate
+        let debts = vec![
+            debt("A", 1000.0, 0.0,  50.0),
+            debt("B", 2000.0, 0.0, 100.0),
+        ];
+        let result = calculate(debts, 150.0);
+        assert!(result.total_months > 0);
+        assert!(result.total_months < 600);
+    }
+
+    #[test]
+    fn three_debts_snowball_order() {
+        let debts = vec![
+            debt("Medium", 2000.0, 5.0, 50.0),
+            debt("Large",  5000.0, 8.0, 100.0),
+            debt("Small",   500.0, 3.0, 20.0),
+        ];
+        let result = calculate(debts, 300.0);
+        assert_eq!(result.debts[0].name, "Small");
+        assert_eq!(result.debts[1].name, "Medium");
+        assert_eq!(result.debts[2].name, "Large");
+        // Each subsequent debt paid off no earlier than the previous
+        assert!(result.debts[0].payoff_date <= result.debts[1].payoff_date);
+        assert!(result.debts[1].payoff_date <= result.debts[2].payoff_date);
+    }
 }

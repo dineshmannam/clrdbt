@@ -1,6 +1,7 @@
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info};
+use uuid::Uuid;
 
 use crate::{calculation, pdf, storage};
 
@@ -12,7 +13,7 @@ pub struct GenerateRequest {
 
 #[derive(Serialize)]
 pub struct GenerateResponse {
-    pub checkout_url: String,
+    pub download_url: String,
 }
 
 #[derive(Serialize)]
@@ -23,7 +24,6 @@ struct ErrorResponse {
 pub async fn handle(
     Json(req): Json<GenerateRequest>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
-    // Basic validation
     if req.debts.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -44,11 +44,9 @@ pub async fn handle(
         ));
     }
 
-    // Run snowball calculation
     let result = calculation::calculate(req.debts, req.monthly_payment);
     info!("Debt-free date calculated: {}", result.debt_free_date);
 
-    // Generate PDF
     let pdf_bytes = match pdf::render_pdf(&result).await {
         Ok(b) => b,
         Err(e) => {
@@ -60,20 +58,9 @@ pub async fn handle(
         }
     };
 
-    // Create Stripe Checkout session to get a session_id
-    let session = match create_stripe_session().await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Stripe session creation failed: {e}");
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse { error: "Payment setup failed.".into() }),
-            ));
-        }
-    };
+    let pdf_id = Uuid::new_v4().to_string();
 
-    // Upload PDF to GCS /pending/
-    if let Err(e) = storage::upload_pending(&session.id, pdf_bytes).await {
+    if let Err(e) = storage::upload_pdf(&pdf_id, pdf_bytes).await {
         error!("GCS upload failed: {e}");
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -81,48 +68,71 @@ pub async fn handle(
         ));
     }
 
-    Ok((StatusCode::OK, Json(GenerateResponse { checkout_url: session.url })))
+    let download_url = match storage::signed_url(&pdf_id).await {
+        Ok(u) => u,
+        Err(e) => {
+            error!("Signed URL generation failed: {e}");
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: "Download URL generation failed.".into() }),
+            ));
+        }
+    };
+
+    info!("PDF ready: {pdf_id}");
+    Ok((StatusCode::OK, Json(GenerateResponse { download_url })))
 }
 
-struct StripeSession {
-    id: String,
-    url: String,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::{Request, StatusCode}, routing::post, Router};
+    use serde_json::json;
+    use tower::ServiceExt;
 
-async fn create_stripe_session() -> anyhow::Result<StripeSession> {
-    let secret_key = std::env::var("STRIPE_SECRET_KEY")?;
-    let success_url = std::env::var("APP_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".into())
-        + "/success.html?session_id={CHECKOUT_SESSION_ID}";
-    let cancel_url = std::env::var("APP_BASE_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".into())
-        + "/form.html";
-
-    let client = reqwest::Client::new();
-    let res = client
-        .post("https://api.stripe.com/v1/checkout/sessions")
-        .basic_auth(&secret_key, Option::<&str>::None)
-        .form(&[
-            ("payment_method_types[]", "card"),
-            ("mode", "payment"),
-            ("line_items[0][price_data][currency]", "usd"),
-            ("line_items[0][price_data][product_data][name]", "clrdbt — Debt Payoff Plan"),
-            ("line_items[0][price_data][unit_amount]", "900"), // $9.00 in cents
-            ("line_items[0][quantity]", "1"),
-            ("success_url", &success_url),
-            ("cancel_url", &cancel_url),
-        ])
-        .send()
-        .await?;
-
-    if !res.status().is_success() {
-        let body = res.text().await.unwrap_or_default();
-        anyhow::bail!("Stripe error: {body}");
+    fn app() -> Router {
+        Router::new().route("/api/generate", post(handle))
     }
 
-    let body: serde_json::Value = res.json().await?;
-    let id = body["id"].as_str().ok_or_else(|| anyhow::anyhow!("Missing session id"))?.to_string();
-    let url = body["url"].as_str().ok_or_else(|| anyhow::anyhow!("Missing checkout url"))?.to_string();
+    async fn post_json(app: Router, body: serde_json::Value) -> axum::response::Response {
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/generate")
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        app.oneshot(req).await.unwrap()
+    }
 
-    Ok(StripeSession { id, url })
+    #[tokio::test]
+    async fn empty_debts_returns_400() {
+        let res = post_json(app(), json!({ "monthly_payment": 500.0, "debts": [] })).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn payment_below_minimums_returns_400() {
+        let body = json!({
+            "monthly_payment": 50.0,
+            "debts": [
+                { "name": "Card A", "balance": 1000.0, "interest_rate": 15.0, "min_payment": 100.0 }
+            ]
+        });
+        let res = post_json(app(), body).await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn payment_exactly_at_minimum_passes_validation() {
+        // Should pass validation (400 not returned), even if PDF/GCS fails downstream.
+        // We check that it's NOT a 400 — downstream errors give 500.
+        let body = json!({
+            "monthly_payment": 100.0,
+            "debts": [
+                { "name": "Card A", "balance": 1000.0, "interest_rate": 15.0, "min_payment": 100.0 }
+            ]
+        });
+        let res = post_json(app(), body).await;
+        assert_ne!(res.status(), StatusCode::BAD_REQUEST);
+    }
 }

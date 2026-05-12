@@ -18,11 +18,11 @@ User → Frontend (HTML + Tailwind)
           → Snowball Calculation
           → HTML Template → Chromiumoxide → PDF
           → Google Cloud Storage (GCS)
-          → Stripe Checkout
-          → Resend (transactional email)
      → Cloud Run (MVP) → GKE post-MVP
      → GitHub Actions (CI/CD)
 ```
+
+> **Post-MVP only:** Stripe Checkout, Resend email, pricing gate
 
 ### Stack
 
@@ -32,8 +32,8 @@ User → Frontend (HTML + Tailwind)
 | Backend | Rust + Axum |
 | PDF Generation | HTML template → Chromiumoxide |
 | Storage | Google Cloud Storage |
-| Payments | Stripe |
-| Transactional Email | Resend |
+| Payments | Stripe *(post-MVP)* |
+| Transactional Email | Resend *(post-MVP)* |
 | Container Registry | Google Artifact Registry |
 | Orchestration (MVP) | Cloud Run |
 | Orchestration (post-MVP) | GKE (Kubernetes) |
@@ -88,7 +88,16 @@ main    ← production only, protected, no direct commits
 
 ---
 
-## User Flow
+## User Flow (MVP — no payment gate)
+
+```
+1. Landing page (index.html)
+2. Debt input form (form.html)
+3. POST /api/generate → backend calculates, generates PDF, saves to GCS /pdfs/
+4. Returns signed GCS URL (15 min expiry) → auto-download triggers in browser
+```
+
+### Post-MVP flow (once Stripe + Resend are added)
 
 ```
 1. Landing page (index.html)
@@ -100,21 +109,24 @@ main    ← production only, protected, no direct commits
 7. Backend verifies payment → moves PDF from /pending/ to /delivered/
 8. Returns signed GCS URL (15 min expiry) → auto-download triggers in browser
 9. Resend sends one transactional email with the same signed URL
-   (Stripe also sends its own receipt automatically — we don't build that)
 ```
-
-**Abandoned payments:** GCS lifecycle policy deletes `/pending/` files after 24 hours. No code required.
 
 ---
 
 ## GCS Bucket Structure
 
+### MVP
+```
+/pdfs/{pdf_id}.pdf    ← generated on demand, served immediately
+```
+
+### Post-MVP
 ```
 /pending/{session_id}.pdf    ← generated, not yet paid
 /delivered/{session_id}.pdf  ← payment confirmed
 ```
 
-Lifecycle rule: `/pending/` prefix → delete after 24 hours.
+Lifecycle rule (post-MVP): `/pending/` prefix → delete after 24 hours.
 
 ---
 
@@ -145,7 +157,7 @@ Lifecycle rule: `/pending/` prefix → delete after 24 hours.
 
 ---
 
-## Stripe Integration
+## Stripe Integration *(post-MVP)*
 
 - Use Stripe Checkout (hosted page) — do not build custom payment UI
 - No email field on the form — Stripe collects email at checkout
@@ -157,7 +169,7 @@ Lifecycle rule: `/pending/` prefix → delete after 24 hours.
 
 ---
 
-## Email Delivery
+## Email Delivery *(post-MVP)*
 
 - **Service:** Resend — transactional only
 - **Trigger:** After payment confirmed, send one email with the signed GCS URL
@@ -171,7 +183,16 @@ Lifecycle rule: `/pending/` prefix → delete after 24 hours.
 
 ## Data Model
 
-Key backend struct for a submission:
+MVP backend struct for a submission:
+
+```rust
+struct DebtSubmission {
+    debts: Vec<Debt>,
+    monthly_payment: f64,
+}
+```
+
+Post-MVP (once payment gate is added):
 
 ```rust
 struct DebtSubmission {
@@ -186,7 +207,7 @@ struct DebtSubmission {
 
 ## Pricing
 
-- **$9 flat.** No tiers. No subscriptions. No discounts.
+- **$9 flat.** No tiers. No subscriptions. No discounts. *(post-MVP)*
 
 ---
 
@@ -202,13 +223,18 @@ struct DebtSubmission {
 
 ## Environment Variables (never commit these)
 
+**MVP:**
+```
+GCS_BUCKET_NAME
+GCS_ACCESS_TOKEN
+APP_BASE_URL
+```
+
+**Post-MVP (add when wiring payments + email):**
 ```
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
-GCS_BUCKET_NAME
-GCS_ACCESS_TOKEN
 RESEND_API_KEY
-APP_BASE_URL
 ```
 
 Use Google Secret Manager in production (Cloud Run reads secrets directly). Use `.env` locally (already in `.gitignore`).
@@ -221,15 +247,15 @@ Use Google Secret Manager in production (Cloud Run reads secrets directly). Use 
 |---|---|---|
 | PDF delivery | Server-side, GCS | Enables re-delivery, consistent output |
 | Payoff method | Snowball | Quick wins, psychological momentum |
-| Payment | Stripe Checkout | No custom UI, battle-tested |
+| Payment | Stripe Checkout *(post-MVP)* | No custom UI, battle-tested |
 | Frontend framework | None (HTML + Tailwind) | 4 static pages, no state complexity |
 | Backend language | Rust + Axum | Learning goal, performance |
 | PDF rendering | Chromiumoxide | Design flexibility via HTML templates |
 | Infrastructure (MVP) | Cloud Run | No cluster overhead, scales to zero, fast to ship |
 | Infrastructure (post-MVP) | GKE | Learning goal for Kubernetes, after product is live |
-| Pricing | $9 one-time | Trust signal, no subscription complexity |
+| Pricing | $9 one-time *(post-MVP)* | Trust signal, no subscription complexity |
 | Monthly income input | Excluded for MVP | Focus on ideal payoff path |
-| Email field on form | Excluded | Stripe collects email at checkout — no duplication |
-| Invoice | Stripe built-in | Stripe sends receipt automatically — nothing to build |
-| Transactional email | Resend | Simple API, one email per transaction, no marketing |
+| Payment gate | Excluded from MVP | Ship the product first, add payment after |
+| Email field on form | Excluded | Not needed without payment gate |
+| Transactional email | Resend *(post-MVP)* | Simple API, one email per transaction, no marketing |
 | Email data retention | Not stored | Privacy promise — delivery only, no list building |

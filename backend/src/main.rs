@@ -1,7 +1,4 @@
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use axum::{routing::{get, post}, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -24,8 +21,6 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/generate", post(routes::generate::handle))
-        .route("/api/deliver", get(routes::deliver::handle))
-        .route("/api/webhook/stripe", post(routes::webhook::handle))
         .route("/health", get(|| async { "ok" }))
         .nest_service("/", ServeDir::new("../frontend"))
         .layer(CorsLayer::permissive());
