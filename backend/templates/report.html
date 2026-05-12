@@ -1,210 +1,152 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+  NOTE: This template loads Tailwind CSS and fonts from external CDNs.
+  Chromiumoxide makes live network requests at render time, so an internet
+  connection is required. For production hardening, bundle Tailwind and
+  embed fonts locally to remove this CDN dependency.
+-->
+<html class="light" lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Georgia', serif;
-      font-size: 12pt;
-      color: #111;
-      background: #fff;
-      padding: 40px 50px;
-      max-width: 780px;
-      margin: 0 auto;
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600;700;800&family=Inter:wght@400;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,700&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      "colors": {
+        "silver-light": "#E0E0E0",
+        "graphite-grey": "#333333",
+        "paper-white": "#FFFFFF",
+        "ink-black": "#000000"
+      },
+      "fontFamily": {
+        "summary-value": ["Hanken Grotesk"],
+        "table-cell-bold": ["Inter"],
+        "hero-date": ["Hanken Grotesk"],
+        "caption": ["Inter"],
+        "section-label": ["Hanken Grotesk"],
+        "table-cell": ["Inter"],
+        "table-header": ["Inter"],
+        "tagline": ["Hanken Grotesk"]
+      },
+      "fontSize": {
+        "summary-value": ["18pt", {"lineHeight": "1.2", "fontWeight": "700"}],
+        "table-cell-bold": ["11pt", {"lineHeight": "1.4", "fontWeight": "600"}],
+        "hero-date": ["72pt", {"lineHeight": "1.0", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+        "caption": ["8pt", {"lineHeight": "1.2", "fontWeight": "400"}],
+        "section-label": ["12pt", {"lineHeight": "1.2", "letterSpacing": "0.1em", "fontWeight": "600"}],
+        "table-cell": ["11pt", {"lineHeight": "1.4", "fontWeight": "400"}],
+        "table-header": ["9pt", {"lineHeight": "1.2", "fontWeight": "700"}],
+        "tagline": ["14pt", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "500"}]
+      }
     }
-
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #111;
-      padding-bottom: 20px;
-      margin-bottom: 28px;
+  }
+}</script>
+<style>
+  @media print {
+    body { background: white !important; margin: 0; padding: 0; }
+    .print-container {
+      width: 8.5in !important;
+      height: 11in !important;
+      margin: 0 !important;
+      padding: 0.4in 0.5in !important;
+      box-shadow: none !important;
+      border: none !important;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
     }
-
-    .label {
-      font-size: 9pt;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: #555;
-      margin-bottom: 6px;
-    }
-
-    .debt-free-date {
-      font-size: 40pt;
-      font-weight: 900;
-      line-height: 1;
-      letter-spacing: -1px;
-    }
-
-    .subtitle {
-      font-size: 10pt;
-      color: #555;
-      margin-top: 8px;
-    }
-
-    h2 {
-      font-size: 11pt;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 10px;
-      color: #333;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 10pt;
-      margin-bottom: 28px;
-    }
-
-    thead th {
-      border-bottom: 1.5px solid #111;
-      padding: 6px 8px;
-      text-align: left;
-      font-size: 9pt;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #444;
-    }
-
-    tbody td {
-      padding: 7px 8px;
-      border-bottom: 1px solid #e5e5e5;
-    }
-
-    tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    .order-num {
-      font-weight: 700;
-      color: #111;
-    }
-
-    .summary {
-      background: #f9f9f9;
-      border: 1px solid #e5e5e5;
-      border-radius: 4px;
-      padding: 16px 20px;
-      margin-bottom: 32px;
-      font-size: 10pt;
-    }
-
-    .summary-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 0;
-    }
-
-    .summary-row .val {
-      font-weight: 700;
-    }
-
-    .signature-section {
-      margin-top: auto;
-      border-top: 1.5px solid #111;
-      padding-top: 20px;
-    }
-
-    .sig-line {
-      border-bottom: 1px solid #111;
-      width: 320px;
-      height: 32px;
-      display: inline-block;
-      margin-right: 40px;
-    }
-
-    .sig-label {
-      font-size: 8pt;
-      color: #555;
-      margin-top: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    .sig-callout {
-      font-size: 9pt;
-      font-style: italic;
-      color: #555;
-      margin-top: 12px;
-    }
-
-    .footer {
-      margin-top: 20px;
-      font-size: 8pt;
-      color: #bbb;
-      text-align: center;
-    }
-  </style>
+  }
+</style>
 </head>
-<body>
+<body class="bg-white flex justify-center">
 
-  <div class="header">
-    <div class="label">Your Debt-Free Date</div>
-    <div class="debt-free-date">{{ debt_free_date }}</div>
-    <div class="subtitle">Snowball method &mdash; {{ total_months }} months from today</div>
+<!-- 8.5 x 11 Page Container -->
+<main class="print-container bg-paper-white w-[8.5in] h-[11in] flex flex-col justify-between overflow-hidden relative box-border">
+
+  <!-- Header -->
+  <header class="flex justify-between items-center px-[0.5in] py-4 w-full border-b border-silver-light">
+    <div class="font-section-label text-section-label font-bold text-ink-black uppercase tracking-[0.1em]">Official Debt Clearance Report</div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="px-[0.5in] pt-[0.4in] pb-[0.4in] flex-grow flex flex-col">
+
+    <!-- Hero Block -->
+    <section class="text-center mb-10">
+      <h2 class="font-section-label text-section-label text-ink-black uppercase tracking-widest mb-2 border-b border-ink-black inline-block pb-1 font-semibold px-2">Scheduled Freedom Date</h2>
+      <h1 class="font-hero-date text-hero-date text-ink-black font-extrabold">{{ debt_free_date }}</h1>
+    </section>
+
+    <!-- Debt Table -->
+    <section class="mb-8">
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="border-b-2 border-ink-black">
+            <th class="font-table-header text-table-header text-ink-black text-left py-3">ACCOUNT</th>
+            <th class="font-table-header text-table-header text-ink-black text-right py-3">BALANCE</th>
+            <th class="font-table-header text-table-header text-ink-black text-right py-3">APR</th>
+            <th class="font-table-header text-table-header text-ink-black text-right py-3">PAYMENT</th>
+            <th class="font-table-header text-table-header text-ink-black text-right py-3">PAID OFF</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for debt in debts %}
+          <tr class="border-b border-silver-light">
+            <td class="font-table-cell text-table-cell text-ink-black py-4">{{ debt.name }}</td>
+            <td class="font-table-cell text-table-cell text-ink-black text-right py-4">{{ debt.balance_fmt }}</td>
+            <td class="font-table-cell text-table-cell text-ink-black text-right py-4">{{ debt.interest_rate_fmt }}</td>
+            <td class="font-table-cell text-table-cell text-ink-black text-right py-4">{{ debt.min_payment_fmt }}</td>
+            <td class="font-table-cell-bold text-table-cell-bold text-ink-black text-right py-4">{{ debt.payoff_date }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Summary Block -->
+    <section class="grid grid-cols-3 border border-graphite-grey p-6 mb-8">
+      <div class="flex flex-col">
+        <span class="font-table-header text-table-header text-graphite-grey uppercase mb-1">Total Debt</span>
+        <span class="font-summary-value text-summary-value text-ink-black">{{ total_balance }}</span>
+      </div>
+      <div class="flex flex-col border-x border-silver-light px-6">
+        <span class="font-table-header text-table-header text-graphite-grey uppercase mb-1">Interest Paid</span>
+        <span class="font-summary-value text-summary-value text-ink-black">{{ total_interest }}</span>
+      </div>
+      <div class="flex flex-col pl-6">
+        <span class="font-table-header text-table-header text-graphite-grey uppercase mb-1">Monthly Payment</span>
+        <span class="font-summary-value text-summary-value text-ink-black">{{ monthly_payment }}</span>
+      </div>
+    </section>
+
+    <!-- Signature Block -->
+    <section class="mt-auto pb-6 flex-grow flex flex-col justify-end">
+      <div class="flex justify-between items-end">
+        <div class="w-1/2">
+          <p class="font-caption text-caption text-graphite-grey italic mb-2 leading-tight">Note: This plan reflects your current monthly commitment. Any additional payments or income growth will accelerate your debt-free date.</p>
+          <div class="w-full h-8 border-b border-ink-black mb-2"></div>
+          <p class="font-tagline text-[10pt] text-ink-black uppercase tracking-widest">Authorized Signature</p>
+        </div>
+        <div class="text-right">
+          <p class="font-tagline text-tagline text-ink-black italic mb-1">Sign it. Hang it. Own it.</p>
+          <span class="font-caption text-caption text-graphite-grey block">Generated on</span>
+          <span class="font-caption text-caption text-ink-black font-bold">{{ generated_date }}</span>
+        </div>
+      </div>
+    </section>
+
   </div>
 
-  <h2>Payoff Order</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Debt</th>
-        <th>Balance</th>
-        <th>Rate</th>
-        <th>Min. Payment</th>
-        <th>Paid Off By</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for debt in debts %}
-      <tr>
-        <td class="order-num">{{ loop.index }}</td>
-        <td>{{ debt.name }}</td>
-        <td>${{ debt.balance }}</td>
-        <td>{{ debt.interest_rate }}%</td>
-        <td>${{ debt.min_payment }}</td>
-        <td>{{ debt.payoff_date }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <!-- Footer -->
+  <footer class="flex flex-col items-center w-full px-[0.5in] pb-[0.3in] border-t border-silver-light pt-2">
+    <div class="font-tagline text-[12pt] font-bold text-ink-black tracking-tighter">CLRDBT.COM</div>
+  </footer>
 
-  <h2>Summary</h2>
-  <div class="summary">
-    <div class="summary-row">
-      <span>Total debt today</span>
-      <span class="val">${{ total_balance }}</span>
-    </div>
-    <div class="summary-row">
-      <span>Monthly payment</span>
-      <span class="val">${{ monthly_payment }}</span>
-    </div>
-    <div class="summary-row">
-      <span>Total interest paid</span>
-      <span class="val">${{ total_interest }}</span>
-    </div>
-    <div class="summary-row">
-      <span>Debt-free date</span>
-      <span class="val">{{ debt_free_date }}</span>
-    </div>
-  </div>
-
-  <div class="signature-section">
-    <div>
-      <span class="sig-line"></span>
-      <span class="sig-line" style="width:180px;"></span>
-    </div>
-    <div style="display:flex; gap: 40px; margin-top:4px;">
-      <div class="sig-label">Signature</div>
-      <div class="sig-label">Date</div>
-    </div>
-    <div class="sig-callout">Sign it. Hang it. Own it.</div>
-  </div>
-
-  <div class="footer">Generated by clrdbt.com &mdash; {{ generated_date }}</div>
-
+</main>
 </body>
 </html>

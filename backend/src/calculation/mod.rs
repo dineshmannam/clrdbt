@@ -15,8 +15,11 @@ pub struct DebtResult {
     pub balance: f64,
     pub interest_rate: f64,
     pub min_payment: f64,
-    pub payoff_date: String, // "Month YYYY"
-    pub payoff_month: u32,   // months from start of calculation
+    pub payoff_date: String,       // "Month YYYY"
+    pub payoff_month: u32,         // months from start of calculation
+    pub balance_fmt: String,       // "$1,200.00"
+    pub interest_rate_fmt: String, // "19.99%"
+    pub min_payment_fmt: String,   // "$25.00"
 }
 
 #[derive(Debug, Serialize)]
@@ -116,6 +119,9 @@ pub fn calculate(mut debts: Vec<DebtInput>, monthly_payment: f64) -> SnowballRes
                 min_payment: d.min_payment,
                 payoff_date,
                 payoff_month: payoff_m,
+                balance_fmt: format_currency(d.balance),
+                interest_rate_fmt: format!("{:.2}%", d.interest_rate),
+                min_payment_fmt: format_currency(d.min_payment),
             }
         })
         .collect();
@@ -124,11 +130,29 @@ pub fn calculate(mut debts: Vec<DebtInput>, monthly_payment: f64) -> SnowballRes
         debts: debts_result,
         debt_free_date: debt_free_str,
         total_months,
-        total_balance: format!("{:.2}", total_balance),
-        total_interest: format!("{:.2}", total_interest),
-        monthly_payment: format!("{:.2}", monthly_payment),
+        total_balance: format_currency(total_balance),
+        total_interest: format_currency(total_interest),
+        monthly_payment: format_currency(monthly_payment),
         generated_date: format_date(today),
     }
+}
+
+fn format_currency(amount: f64) -> String {
+    let cents = (amount * 100.0).round() as u64;
+    let dollars = cents / 100;
+    let cents_remainder = cents % 100;
+
+    let dollars_str = dollars.to_string();
+    let mut result = String::new();
+    let len = dollars_str.len();
+    for (i, c) in dollars_str.chars().enumerate() {
+        if i > 0 && (len - i).is_multiple_of(3) {
+            result.push(',');
+        }
+        result.push(c);
+    }
+
+    format!("${}.{:02}", result, cents_remainder)
 }
 
 fn add_months(date: Date, months: u32) -> Date {
@@ -264,9 +288,8 @@ mod tests {
     fn interest_increases_total_paid() {
         let no_interest = calculate(vec![debt("Card", 1000.0, 0.0, 50.0)], 100.0);
         let with_interest = calculate(vec![debt("Card", 1000.0, 20.0, 50.0)], 100.0);
-        let no_int_paid: f64 = no_interest.total_interest.parse().unwrap();
-        let with_int_paid: f64 = with_interest.total_interest.parse().unwrap();
-        assert!(with_int_paid > no_int_paid);
+        let parse = |s: &str| s.replace(['$', ','], "").parse::<f64>().unwrap();
+        assert!(parse(&with_interest.total_interest) > parse(&no_interest.total_interest));
         assert!(with_interest.total_months > no_interest.total_months);
     }
 
