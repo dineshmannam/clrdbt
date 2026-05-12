@@ -238,6 +238,17 @@ struct DebtSubmission {
 - Small, frequent commits. No large PRs.
 - MVP runs on Cloud Run. GKE and full Kubernetes come post-MVP once the product is live.
 
+## Pre-commit Checklist (backend)
+
+Always run these before committing — CI enforces all three and will fail fast if skipped:
+
+```bash
+cd backend
+cargo fmt          # fix formatting — CI runs cargo fmt --check
+cargo clippy -- -D warnings   # no warnings allowed
+cargo test         # all tests must pass
+```
+
 ---
 
 ## Environment Variables (never commit these)
