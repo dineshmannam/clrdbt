@@ -292,3 +292,4 @@ Use Google Secret Manager in production (Cloud Run reads secrets directly). Use 
 | Input validation | `validate()` in `generate.rs` | Standalone fn, tested directly without HTTP/PDF/GCS overhead |
 | GCS bucket() error handling | Returns `Result<String>` | Was `expect()` — panic in async handler kills the test thread instead of returning 500 |
 | deliver.rs / webhook.rs | Not implemented (post-MVP) | Stripe layer removed from MVP; routes don't exist until payment gate is added |
+| PDF template | In design (issue #2) | `backend/templates/report.html` is a placeholder; real design in progress |
