@@ -21,27 +21,46 @@ struct ErrorResponse {
     error: String,
 }
 
-pub async fn handle(
-    Json(req): Json<GenerateRequest>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
+fn validate(req: &GenerateRequest) -> Result<(), String> {
     if req.debts.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse { error: "At least one debt is required.".into() }),
-        ));
+        return Err("At least one debt is required.".into());
+    }
+
+    if !req.monthly_payment.is_finite() || req.monthly_payment <= 0.0 {
+        return Err("Monthly payment must be a positive number.".into());
+    }
+
+    for debt in &req.debts {
+        if !debt.balance.is_finite() || debt.balance <= 0.0 {
+            return Err(format!("'{}': balance must be a positive number.", debt.name));
+        }
+        if !debt.interest_rate.is_finite() || debt.interest_rate < 0.0 {
+            return Err(format!("'{}': interest rate must be 0 or greater.", debt.name));
+        }
+        if debt.interest_rate > 1000.0 {
+            return Err(format!("'{}': interest rate seems unreasonably high (> 1000%).", debt.name));
+        }
+        if !debt.min_payment.is_finite() || debt.min_payment < 0.0 {
+            return Err(format!("'{}': minimum payment must be 0 or greater.", debt.name));
+        }
     }
 
     let total_min: f64 = req.debts.iter().map(|d| d.min_payment).sum();
     if req.monthly_payment < total_min {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: format!(
-                    "Monthly payment must be at least ${:.2} (sum of minimums).",
-                    total_min
-                ),
-            }),
+        return Err(format!(
+            "Monthly payment must be at least ${:.2} (sum of minimums).",
+            total_min
         ));
+    }
+
+    Ok(())
+}
+
+pub async fn handle(
+    Json(req): Json<GenerateRequest>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    if let Err(msg) = validate(&req) {
+        return Err((StatusCode::BAD_REQUEST, Json(ErrorResponse { error: msg })));
     }
 
     let result = calculation::calculate(req.debts, req.monthly_payment);
@@ -87,7 +106,6 @@ pub async fn handle(
 mod tests {
     use super::*;
     use axum::{body::Body, http::{Request, StatusCode}, routing::post, Router};
-    use serde_json::json;
     use tower::ServiceExt;
 
     fn app() -> Router {
@@ -104,14 +122,113 @@ mod tests {
         app.oneshot(req).await.unwrap()
     }
 
+    fn req(monthly_payment: f64, debts: Vec<calculation::DebtInput>) -> GenerateRequest {
+        GenerateRequest { monthly_payment, debts }
+    }
+
+    fn debt(name: &str, balance: f64, rate: f64, min: f64) -> calculation::DebtInput {
+        calculation::DebtInput { name: name.into(), balance, interest_rate: rate, min_payment: min }
+    }
+
+    // --- validate() unit tests (no HTTP, no PDF, no GCS) ---
+
+    #[test]
+    fn rejects_empty_debts() {
+        assert!(validate(&req(500.0, vec![])).is_err());
+    }
+
+    #[test]
+    fn rejects_zero_monthly_payment() {
+        assert!(validate(&req(0.0, vec![debt("A", 1000.0, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_negative_monthly_payment() {
+        assert!(validate(&req(-100.0, vec![debt("A", 1000.0, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_nan_monthly_payment() {
+        assert!(validate(&req(f64::NAN, vec![debt("A", 1000.0, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_infinite_monthly_payment() {
+        assert!(validate(&req(f64::INFINITY, vec![debt("A", 1000.0, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_negative_balance() {
+        assert!(validate(&req(200.0, vec![debt("A", -500.0, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_zero_balance() {
+        assert!(validate(&req(200.0, vec![debt("A", 0.0, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_nan_balance() {
+        assert!(validate(&req(200.0, vec![debt("A", f64::NAN, 10.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_negative_interest_rate() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, -5.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_absurd_interest_rate() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, 1001.0, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_nan_interest_rate() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, f64::NAN, 50.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_negative_min_payment() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, 10.0, -10.0)])).is_err());
+    }
+
+    #[test]
+    fn rejects_nan_min_payment() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, 10.0, f64::NAN)])).is_err());
+    }
+
+    #[test]
+    fn rejects_payment_below_sum_of_minimums() {
+        assert!(validate(&req(50.0, vec![debt("A", 1000.0, 15.0, 100.0)])).is_err());
+    }
+
+    #[test]
+    fn allows_zero_interest_rate() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, 0.0, 50.0)])).is_ok());
+    }
+
+    #[test]
+    fn allows_zero_min_payment() {
+        assert!(validate(&req(200.0, vec![debt("A", 1000.0, 10.0, 0.0)])).is_ok());
+    }
+
+    #[test]
+    fn allows_payment_exactly_at_minimum() {
+        assert!(validate(&req(100.0, vec![debt("A", 1000.0, 15.0, 100.0)])).is_ok());
+    }
+
+    // --- HTTP integration tests (only for cases that need full handler wiring) ---
+
     #[tokio::test]
-    async fn empty_debts_returns_400() {
+    async fn http_empty_debts_returns_400() {
+        use serde_json::json;
         let res = post_json(app(), json!({ "monthly_payment": 500.0, "debts": [] })).await;
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
-    async fn payment_below_minimums_returns_400() {
+    async fn http_payment_below_minimums_returns_400() {
+        use serde_json::json;
         let body = json!({
             "monthly_payment": 50.0,
             "debts": [
@@ -123,9 +240,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn payment_exactly_at_minimum_passes_validation() {
-        // Should pass validation (400 not returned), even if PDF/GCS fails downstream.
-        // We check that it's NOT a 400 — downstream errors give 500.
+    async fn http_valid_request_passes_validation() {
+        use serde_json::json;
+        // Passes validation. PDF/GCS will fail downstream — we only check it's not a 400.
         let body = json!({
             "monthly_payment": 100.0,
             "debts": [

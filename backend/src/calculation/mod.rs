@@ -15,7 +15,8 @@ pub struct DebtResult {
     pub balance: f64,
     pub interest_rate: f64,
     pub min_payment: f64,
-    pub payoff_date: String, // "Month YYYY"
+    pub payoff_date: String,  // "Month YYYY"
+    pub payoff_month: u32,    // months from start of calculation
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +115,7 @@ pub fn calculate(mut debts: Vec<DebtInput>, monthly_payment: f64) -> SnowballRes
                 interest_rate: d.interest_rate,
                 min_payment: d.min_payment,
                 payoff_date,
+                payoff_month: payoff_m,
             }
         })
         .collect();
@@ -221,18 +223,16 @@ mod tests {
 
     #[test]
     fn minimum_rolls_over_after_payoff() {
-        // Small: $500 at 0%, min $100 → paid off in 5 months when $200/mo extra
-        // Big:   $2 000 at 0%, min $100
-        // Total budget: $300. Extra $100 goes to small each month.
-        // After month 5 (small gone): full $300 hits big.
-        // Big balance after 5 months of $100 payments: $1 500.
-        // $1 500 / $300 = 5 more months → total 10.
+        // Small: $500 at 0%, min $100. Extra budget = $300 - $100 - $100 = $100.
+        // Small gets $200/month → paid in 3 months (500→300→100→0).
+        // Big after 3 months of $100 min: $1700. Month 3 extra also hits Big: $1600.
+        // Months 4–9: full $300 on Big → 1600/300 = 5.3 → 6 more months → total 9.
         let debts = vec![
             debt("Big",   2000.0, 0.0, 100.0),
             debt("Small",  500.0, 0.0, 100.0),
         ];
         let result = calculate(debts, 300.0);
-        assert_eq!(result.total_months, 10);
+        assert_eq!(result.total_months, 9);
     }
 
     #[test]
@@ -242,10 +242,10 @@ mod tests {
             debt("Small",  300.0, 5.0, 20.0),
         ];
         let result = calculate(debts, 150.0);
-        // Small should have an earlier payoff date than Big
+        // Small should have an earlier payoff month than Big
         let small = result.debts.iter().find(|d| d.name == "Small").unwrap();
         let big   = result.debts.iter().find(|d| d.name == "Big").unwrap();
-        assert!(small.payoff_date <= big.payoff_date);
+        assert!(small.payoff_month <= big.payoff_month);
     }
 
     // --- Interest accrual ---
@@ -310,7 +310,7 @@ mod tests {
         assert_eq!(result.debts[1].name, "Medium");
         assert_eq!(result.debts[2].name, "Large");
         // Each subsequent debt paid off no earlier than the previous
-        assert!(result.debts[0].payoff_date <= result.debts[1].payoff_date);
-        assert!(result.debts[1].payoff_date <= result.debts[2].payoff_date);
+        assert!(result.debts[0].payoff_month <= result.debts[1].payoff_month);
+        assert!(result.debts[1].payoff_month <= result.debts[2].payoff_month);
     }
 }

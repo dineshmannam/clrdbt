@@ -141,6 +141,25 @@ Lifecycle rule (post-MVP): `/pending/` prefix → delete after 24 hours.
 7. Calculate exact payoff date for each debt
 8. Final payoff date = the hero element of the PDF
 
+`DebtResult` includes `payoff_month: u32` (months from calculation start) alongside `payoff_date: String`. Use `payoff_month` for ordering comparisons — `payoff_date` is "Month YYYY" format which is **not** lexicographically comparable. Month names sort alphabetically, not chronologically ("September" > "November" alphabetically, but September comes first on the calendar). Three tests failed this way before the numeric field was added.
+
+---
+
+## Input Validation (`routes/generate.rs → validate()`)
+
+All validation runs before the calculation. Invalid input returns HTTP 400 with a descriptive error message.
+
+| Field | Rejected | Allowed |
+|---|---|---|
+| `monthly_payment` | `≤ 0`, `NaN`, `Infinity` | Any positive finite number |
+| `balance` (per debt) | `≤ 0`, `NaN`, `Infinity` | Any positive finite number |
+| `interest_rate` (per debt) | `< 0`, `> 1000%`, `NaN`, `Infinity` | `0` to `1000` inclusive |
+| `min_payment` (per debt) | `< 0`, `NaN`, `Infinity` | `0` or any positive finite number |
+| `monthly_payment` vs minimums | `< sum of all min_payments` | `≥ sum of all min_payments` |
+| debt list | empty | at least one debt |
+
+Zero interest rate and zero min payment are both valid (0% promo cards, debts with no stated minimum).
+
 ---
 
 ## PDF Design Rules
@@ -259,3 +278,6 @@ Use Google Secret Manager in production (Cloud Run reads secrets directly). Use 
 | Email field on form | Excluded | Not needed without payment gate |
 | Transactional email | Resend *(post-MVP)* | Simple API, one email per transaction, no marketing |
 | Email data retention | Not stored | Privacy promise — delivery only, no list building |
+| Input validation | `validate()` in `generate.rs` | Standalone fn, tested directly without HTTP/PDF/GCS overhead |
+| GCS bucket() error handling | Returns `Result<String>` | Was `expect()` — panic in async handler kills the test thread instead of returning 500 |
+| deliver.rs / webhook.rs | Not implemented (post-MVP) | Stripe layer removed from MVP; routes don't exist until payment gate is added |

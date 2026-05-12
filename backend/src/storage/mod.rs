@@ -3,8 +3,8 @@ use std::env;
 
 const PDF_PREFIX: &str = "pdfs";
 
-fn bucket() -> String {
-    env::var("GCS_BUCKET_NAME").expect("GCS_BUCKET_NAME must be set")
+fn bucket() -> Result<String> {
+    env::var("GCS_BUCKET_NAME").map_err(|_| anyhow::anyhow!("GCS_BUCKET_NAME must be set"))
 }
 
 fn access_token() -> Result<String> {
@@ -28,7 +28,7 @@ pub async fn signed_url(pdf_id: &str) -> Result<String> {
 // ── Internal GCS helpers ──────────────────────────────────────────────────────
 
 async fn upload_object(object_name: &str, data: Vec<u8>) -> Result<()> {
-    let bucket = bucket();
+    let bucket = bucket()?;
     let token = access_token()?;
     let url = format!(
         "https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o?uploadType=media&name={object_name}"
@@ -53,7 +53,7 @@ async fn upload_object(object_name: &str, data: Vec<u8>) -> Result<()> {
 
 async fn generate_signed_url(object_name: &str) -> Result<String> {
     // MVP: plain GCS URL with access token. Replace with V4 signed URLs post-MVP.
-    let bucket = bucket();
+    let bucket = bucket()?;
     let token = access_token()?;
     let url = format!(
         "https://storage.googleapis.com/storage/v1/b/{bucket}/o/{}?alt=media&access_token={token}",
