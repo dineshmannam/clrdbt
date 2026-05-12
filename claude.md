@@ -63,6 +63,9 @@ clrdbt/
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   └── ingress.yaml
+├── scripts/           # One-time operational scripts
+│   ├── bootstrap.sh   # GCP MVP setup (issue #4, not yet implemented)
+│   └── README.md
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml     # Runs on every push to dev
@@ -292,4 +295,6 @@ Use Google Secret Manager in production (Cloud Run reads secrets directly). Use 
 | Input validation | `validate()` in `generate.rs` | Standalone fn, tested directly without HTTP/PDF/GCS overhead |
 | GCS bucket() error handling | Returns `Result<String>` | Was `expect()` — panic in async handler kills the test thread instead of returning 500 |
 | deliver.rs / webhook.rs | Not implemented (post-MVP) | Stripe layer removed from MVP; routes don't exist until payment gate is added |
-| PDF template | In design (issue #2) | `backend/templates/report.html` is a placeholder; real design in progress |
+| PDF template | Implemented (issue #2 closed) | Designer template wired with Jinja2 variables; loads Tailwind + fonts from CDN |
+| GCP bootstrap | Shell script, not Terraform (issue #4) | Terraform chicken-and-egg problem; script is sufficient for MVP resource set |
+| Terraform | Post-MVP only (issue #5) | Earns its keep at GKE phase; GCP project created manually first to hold state bucket |
