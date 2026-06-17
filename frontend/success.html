@@ -11,11 +11,6 @@
   <main class="min-h-screen flex flex-col items-center justify-center px-6 py-20">
     <div class="max-w-lg w-full text-center">
 
-      <div id="loading" class="">
-        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-black mx-auto mb-6"></div>
-        <p class="text-gray-500">Verifying payment and preparing your plan...</p>
-      </div>
-
       <div id="success" class="hidden">
         <p class="text-5xl mb-6">&#10003;</p>
         <h1 class="text-3xl font-black mb-3">Your debt-free plan is ready.</h1>
@@ -38,54 +33,27 @@
 
   <script>
     const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get('session_id');
+    const downloadUrl = params.get('download_url');
 
-    const loading = document.getElementById('loading');
     const success = document.getElementById('success');
     const error = document.getElementById('error');
     const errorText = document.getElementById('error-text');
     const downloadLink = document.getElementById('download-link');
 
-    async function deliver() {
-      if (!sessionId) {
-        showError('No session ID found. Please return to the homepage.');
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/deliver?session_id=${encodeURIComponent(sessionId)}`);
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(err.error || 'Delivery failed');
-        }
-
-        const data = await res.json();
-        const url = data.download_url;
-
-        downloadLink.href = url;
-        loading.classList.add('hidden');
-        success.classList.remove('hidden');
-
-        // Auto-trigger download
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'clrdbt-plan.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } catch (err) {
-        showError(err.message);
-      }
-    }
-
-    function showError(msg) {
-      loading.classList.add('hidden');
-      errorText.textContent = msg;
+    if (!downloadUrl) {
+      errorText.textContent = 'No download link found. Please return to the homepage and try again.';
       error.classList.remove('hidden');
-    }
+    } else {
+      downloadLink.href = downloadUrl;
+      success.classList.remove('hidden');
 
-    deliver();
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = 'clrdbt-plan.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   </script>
 
 </body>
