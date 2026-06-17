@@ -52,11 +52,12 @@
         <div class="pt-4">
           <button
             type="submit"
-            class="w-full bg-black text-white font-semibold py-4 rounded-md hover:bg-gray-800 transition text-lg"
+            id="submit-btn"
+            class="w-full bg-black text-white font-semibold py-4 rounded-md hover:bg-gray-800 transition text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Generate My Plan — $9
+            Generate My Plan
           </button>
-          <p class="text-xs text-center text-gray-400 mt-2">You'll be taken to Stripe to complete payment.</p>
+          <p class="text-xs text-center text-gray-400 mt-2">Your one-page PDF downloads immediately.</p>
         </div>
 
       </form>
@@ -70,6 +71,7 @@
     const container = document.getElementById('debts-container');
     const addBtn = document.getElementById('add-debt-btn');
     const form = document.getElementById('debt-form');
+    const submitBtn = document.getElementById('submit-btn');
     const errorMsg = document.getElementById('error-msg');
     let debtCount = 0;
 
@@ -138,6 +140,9 @@
         return;
       }
 
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Generating your plan…';
+
       try {
         const res = await fetch('/api/generate', {
           method: 'POST',
@@ -151,11 +156,12 @@
         }
 
         const data = await res.json();
-        // Redirect to Stripe Checkout
-        window.location.href = data.checkout_url;
+        window.location.href = `/success.html?download_url=${encodeURIComponent(data.download_url)}`;
       } catch (err) {
         errorMsg.textContent = err.message;
         errorMsg.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Generate My Plan';
       }
     });
   </script>

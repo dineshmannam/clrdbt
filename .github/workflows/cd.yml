@@ -54,8 +54,6 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.IMAGE }}:${{ github.sha }}
           secrets: |
-            STRIPE_SECRET_KEY=stripe-secret-key:latest
-            STRIPE_WEBHOOK_SECRET=stripe-webhook-secret:latest
             GCS_BUCKET_NAME=gcs-bucket-name:latest
             GCS_ACCESS_TOKEN=gcs-access-token:latest
           env_vars: |
